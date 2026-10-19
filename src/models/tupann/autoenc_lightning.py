@@ -7,7 +7,7 @@ from src.models.lightning import LModule
 from src.models.tupann.autoenc_parts.autoenc_utils import DiagonalGaussianDistribution
 from src.models.tupann.autoenc_parts.modules import Decoder, Encoder
 from src.models.tupann.utils import make_grid, warp
-from src.utils.lightning_utils import transform_multiple_loc
+from src.utils.lightning_utils import calc_weights, transform_multiple_loc
 
 # def wait():
 #     estructure_time = time.localtime()
@@ -36,6 +36,7 @@ class model(LModule):
         lead_time_cond: int = 0,
         predict_latent: bool = False,
         image_loss=False,
+        evonet_loss=False,
         **kwargs,
     ):
         true_target_dict = {list(target_shape_dict.keys())[
@@ -45,7 +46,11 @@ class model(LModule):
             true_target_dict,
             **kwargs,
         )
+        assert not (image_loss and evonet_loss), "image_loss and evonet_loss are mutually exclusive"
         self.image_loss = image_loss
+        # Supervise motion and intensity through the Evolution Network (NowcastNet) loss
+        # instead of the optical flow targets. lambda_ weights the motion smoothness term.
+        self.evonet_loss = evonet_loss
         self.automatic_optimization = False
         self.lr = learning_rate
         self.loss_weight = cos_weight
@@ -200,6 +205,54 @@ class model(LModule):
             }
         return loss, log
 
+    def evonet_loss_fn(self, field_pred, intensity_pred, posteriors, x_last, y, transform, inv_transform, split="train"):
+        """Evolution Network loss (see src/models/evolution_network/lightning.py) for one step.
+
+        field_pred: (B, 2, H, W), intensity_pred: (B, 1, H, W), x_last and y: (B, 1, H, W), transformed.
+        """
+        grid = self.grid.repeat(y.shape[0], 1, 1, 1)
+        # Bilinear advection of the last frame: trains the motion field
+        bili = transform(warp(inv_transform(x_last), field_pred, grid, padding_mode="border"))
+        # Nearest advection (no gradient) plus intensity: trains the intensity field
+        with torch.no_grad():
+            advected = warp(inv_transform(x_last), field_pred, grid, mode="nearest", padding_mode="border")
+        evo = transform(advected + intensity_pred)
+
+        weights = calc_weights(y, self.xmax, self.type_loss, self.weighted)
+        train_loss_f = self.train_loss()
+        image_loss = train_loss_f(evo * weights, y * weights) + train_loss_f(bili * weights, y * weights)
+
+        v1 = field_pred[:, 0:1]
+        v2 = field_pred[:, 1:2]
+        g1 = self.g1.to(self.device)
+        g2 = self.g2.to(self.device)
+        dv1x = F.conv2d(v1, g1, padding=1)
+        dv1y = F.conv2d(v1, g2, padding=1)
+        dv2x = F.conv2d(v2, g1, padding=1)
+        dv2y = F.conv2d(v2, g2, padding=1)
+        smooth_loss = torch.mean((torch.pow(dv1x, 2) + torch.pow(dv1y, 2)) * weights)
+        smooth_loss += torch.mean((torch.pow(dv2x, 2) + torch.pow(dv2y, 2)) * weights)
+
+        kl_loss = posteriors.kl()
+        kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+
+        loss = image_loss + self.lambda_ * smooth_loss + self.kl_weight * kl_loss
+
+        log = {
+            "{}/total_loss".format(split): loss.detach(),
+            "{}/kl_loss".format(split): kl_loss.detach(),
+            "{}/image_loss".format(split): image_loss.detach(),
+            "{}/smooth_loss".format(split): smooth_loss.detach(),
+        }
+        return loss, log
+
+    def flow_agreement(self, motion_truth, motion_pred, split="val"):
+        # Diagnostic only: how close the learned motion (B, 2, H, W) is to the optical flow
+        return {
+            "{}/flow_l1_vector".format(split): torch.abs(motion_truth - motion_pred).mean().detach(),
+            "{}/flow_cossim".format(split): F.cosine_similarity(motion_truth, motion_pred, dim=1).mean().detach(),
+        }
+
     def loss_val(
         self,
         motion_truth,
@@ -270,9 +323,21 @@ class model(LModule):
 
         self.toggle_optimizer(opt_ae)
 
-        aeloss, log_dict_ae = self.loss(
-            motion_fields, intensities, reconstructions, posterior, split="train", x=input[:, -1:], y=y,transform = loc_transform, inv_transform = loc_inv_transform
-        )
+        if self.evonet_loss:
+            aeloss, log_dict_ae = self.evonet_loss_fn(
+                reconstructions[:, :2],
+                reconstructions[:, 2:3],
+                posterior,
+                input[:, -1:],
+                y[:, :1],
+                transform=loc_transform,
+                inv_transform=loc_inv_transform,
+                split="train",
+            )
+        else:
+            aeloss, log_dict_ae = self.loss(
+                motion_fields, intensities, reconstructions, posterior, split="train", x=input[:, -1:], y=y,transform = loc_transform, inv_transform = loc_inv_transform
+            )
 
         self.log_dict(
             log_dict_ae,
@@ -361,6 +426,24 @@ class model(LModule):
         pred = self.forward_lead_time_all(
             input, x_ini, transform=loc_transform, inv_transform=loc_inv_transform)
         image_pred, intensities_pred, motion_fields_pred, posterior = pred
+
+        if self.evonet_loss:
+            val_loss, log_dict_ae = self.evonet_loss_fn(
+                motion_fields_pred[:, 0],
+                intensities_pred[:, 0],
+                posterior[0],
+                x_ini,
+                Y[list(Y.keys())[1]][:, :1],
+                transform=loc_transform,
+                inv_transform=loc_inv_transform,
+                split="val",
+            )
+            log_dict_ae.update(
+                self.flow_agreement(Y[self.fields_intensities_key][:, 0, :2], motion_fields_pred[:, 0])
+            )
+            self.log_dict(log_dict_ae, sync_dist=True)
+            concat_pred = torch.cat((motion_fields_pred, intensities_pred), dim=2)
+            return {list(Y.keys())[0]: concat_pred, list(Y.keys())[1]: image_pred}
 
         val_loss, log_dict_ae = self.loss_val(
             motion_fields,

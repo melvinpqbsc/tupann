@@ -1,0 +1,21 @@
+# TUPANN autoencoder (same architecture/training hyperparameters as autoenc_tupann.yaml)
+# trained with the Evolution Network loss instead of optical flow supervision:
+#   l1(evolved, y) + l1(bilinear advection, y) + lambda_ * motion smoothness + kl_weight * KL
+# loss (l1), weights (uniform) and lambda_ (1e-2) are the Evolution Network defaults.
+model_name: tupann_autoenc
+
+batch_size: 8
+n_epochs: 100
+
+learning_rate: 0.0001
+
+embed_dim: 4
+reduc_factor: 4
+channels: 128
+dropout: 0.2
+n_fields: 1
+
+kl_weight: 1.0e-06
+
+evonet_loss: True
+lambda_: 0.01
