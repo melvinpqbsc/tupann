@@ -2,46 +2,34 @@ import torch
 
 from src.models.lightning import LModule
 from src.models.unet.unet_parts import DoubleConv, Down, OutConv, Up
+from src.utils.lightning_utils import calc_concat_shape_dict
 
 
 class model(LModule):
     def __init__(
         self,
-        input_shape,
-        target_shape,
+        input_shape_dict,
+        target_shape_dict,
         learning_rate: float = 0.0001,
         weight_decay: float = 0.0,
         bilinear: bool = True,
-        truth: torch.Tensor = torch.empty(1),
-        context: tuple = torch.empty(1),
-        truth_val: torch.Tensor = torch.empty(1),
-        context_val: tuple = torch.empty(1),
-        loss: str = "l1",
-        weights: str = "uniform",
-        xmax: float = 3 * 20 / 5,
         **kwargs,
     ):
         super().__init__(
-            input_shape,
-            target_shape,
-            truth=truth,
-            context=context,
-            truth_val=truth_val,
-            context_val=context_val,
-            loss=loss,
-            xmax=xmax,
-            weights=weights,
+            input_shape_dict,
+            target_shape_dict,
+            learning_rate=learning_rate,
+            **kwargs,
         )
         self.save_hyperparameters()
 
-        self.channels_in = input_shape[0]
-        self.channels_out = target_shape[0]
+        self.channels_in = calc_concat_shape_dict(input_shape_dict)[0]
+        self.channels_out = calc_concat_shape_dict(target_shape_dict)[0]
 
         self.lr = learning_rate
         self.weight_decay = weight_decay
 
         self.bilinear = bilinear
-        self.weighted = weights
 
         self.inc = DoubleConv(self.channels_in, 64)
         self.down1 = Down(64, 128)

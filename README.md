@@ -88,6 +88,15 @@ python src/models/train.py \
     --hparams_config tupann_image_loss
 ```
 
+Fourier Neural Operator baselines (FNO and AFNO) are also available. They stack the input lags as channels and predict all lead times in a single pass, so they use a data configuration with only the precipitation target:
+
+```bash
+python src/models/train.py \
+    --data_config goes16_rj_rain_events \
+    --eval_config goes16_eval_rio \
+    --hparams_config fno  # or afno
+```
+
 Training can be resumed from an existing checkpoint by passing ``--ckpt_file <filename>`` to ``train.py``, where ``<filename>`` is the name of a ``.ckpt`` file in the model output directory. Multiple GPU training is supported via the ``--devices`` argument.
 
 ### Evaluation

@@ -1,8 +1,10 @@
 # Folders that Git should ignore
 *.ipynb_checkpoints/
-/data
+/data*
 /eval
 /models
+/personal
+model_names.jsonl
 
 # File extensions that Git should ignore
 

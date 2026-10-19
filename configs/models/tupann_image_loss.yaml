@@ -1,4 +1,4 @@
-autoenc_ckpt: 0--best-epoch=17.ckpt
+autoenc_ckpt: 0--best-epoch=10.ckpt
 autoenc_hash: df3f1b8445ea4baea0aaf2708671e4c5
 batch_size: 8
 cos_weight: 0.33

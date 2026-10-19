@@ -6,6 +6,12 @@ from matplotlib.colors import ListedColormap
 from moviepy.video.io.bindings import mplfig_to_npimage
 import warnings
 
+# Target keys that hold motion fields and intensities (2 vector channels + 1 intensity)
+FIELDS_INTENSITIES_KEY_OPTIONS = [
+    "fields_intensities#goes16_rrqpe#darts",
+    "fields_intensities#goes16_rrqpe#lk",
+]
+
 
 def compare_true_pred(X_true, X_pred, cmap, X_model=None, v_max=1, v_min=0):
     if X_model is None:

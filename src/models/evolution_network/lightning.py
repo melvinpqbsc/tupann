@@ -197,6 +197,7 @@ class model(LModule):
         locations = metadata["location"]
         n_locations = len(set(locations)) if isinstance(locations, list) else 1
         x = torch.cat([inputs[key] for key in inputs.keys()], dim=1).to(self.device)
+        targets = {key: value.to(self.device) for key, value in targets.items()}
 
         def loc_transform(t):
             return torch.cat(

@@ -1,0 +1,15 @@
+batch_size: 8
+depth: 6
+drop_path_rate: 0.1
+drop_rate: 0.1
+embed_dim: 192
+hard_thresholding_fraction: 1.0
+learning_rate: 0.0005
+loss: l1
+mlp_ratio: 4.0
+model_name: afno
+n_epochs: 15
+num_blocks: 8
+patch_size: 8
+sparsity_threshold: 0.01
+weight_decay: 0.05

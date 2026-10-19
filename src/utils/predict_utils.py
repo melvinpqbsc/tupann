@@ -176,8 +176,9 @@ def model_to_pred_hdf_chunked(
     model.eval()
     model.to(args.devices[0])
     for i, batch in enumerate(tqdm(pred_dataloader)):
-        chunk = model.predict_step(
-            batch, i, update_metrics=True, return_full=False)
+        with torch.no_grad():
+            chunk = model.predict_step(
+                batch, i, update_metrics=True, return_full=False)
         # Get number of samples in this chunk
         chunk_size = chunk.shape[0]
 

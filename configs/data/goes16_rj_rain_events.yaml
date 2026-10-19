@@ -1,0 +1,20 @@
+input:
+  goes16_rrqpe:
+    lags: [-80,-70,-60,-50,-40,-30,-20,-10, 0]
+    transform: standardize
+target:
+  goes16_rrqpe:
+    lags: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180]
+    transform: standardize
+
+train:
+  locations: ["rio_de_janeiro"]
+  datetimes: "configs/data/train_datetimes[10:-18]-goes16_rrqpe-rj.txt"
+
+val:
+  locations: ["rio_de_janeiro"]
+  datetimes: "configs/data/val_datetimes[10:-18]-goes16_rrqpe-rj.txt"
+
+test:
+  locations: ["rio_de_janeiro"]
+  datetimes: "configs/data/test_datetimes[10:-18]-goes16_rrqpe-rj.txt"

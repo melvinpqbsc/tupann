@@ -1,0 +1,11 @@
+batch_size: 8
+learning_rate: 0.001
+loss: l1
+model_name: fno
+modes: 12
+n_epochs: 15
+n_layers: 4
+padding: 8
+use_grid: 1
+weight_decay: 0.001
+width: 48
